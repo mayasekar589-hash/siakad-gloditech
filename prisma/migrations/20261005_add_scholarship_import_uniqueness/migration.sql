@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "scholarships_student_id_academic_year_kind_key" ON "scholarships"("student_id", "academic_year", "kind");

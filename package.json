@@ -1,0 +1,39 @@
+{
+  "name": "siakad-monorepo",
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "dev:student": "turbo run dev --filter=@siakad/student",
+    "dev:backoffice": "turbo run dev --filter=@siakad/backoffice",
+    "dev:website": "turbo run dev --filter=@siakad/website",
+    "dev:api": "turbo run dev --filter=@siakad/api",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:studio": "prisma studio --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^8.57.1",
+    "prettier": "^3.6.2",
+    "prisma": "6.19.0",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.0": true,
+    "@prisma/engines@6.19.0": true,
+    "@swc/core@1.16.13": true,
+    "prisma@6.19.0": true,
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true
+  }
+}

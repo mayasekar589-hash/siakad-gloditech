@@ -1,0 +1,1197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String     @id @default(uuid()) @db.Uuid
+  email               String     @unique @db.VarChar(320)
+  passwordHash        String     @map("password_hash") @db.VarChar(255)
+  isActive            Boolean    @default(true) @map("is_active")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz(3)
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roles               UserRole[]
+  applicant           Applicant?
+  applicationStatusChanges ApplicationStatusHistory[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(80)
+  name        String           @db.VarChar(120)
+  description String?          @db.VarChar(500)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(120)
+  name        String           @db.VarChar(120)
+  description String?          @db.VarChar(500)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  DOCUMENT_VERIFICATION
+  DOCUMENT_REVISION
+  DOCUMENT_VERIFIED
+  PAYMENT_PENDING
+  PAYMENT_VERIFICATION
+  PAYMENT_VERIFIED
+  READY_FOR_SELECTION
+  IN_SELECTION
+  PASSED_SELECTION
+  FAILED_SELECTION
+  RE_REGISTRATION
+  REGISTERED
+  CANCELLED
+
+  @@map("application_status")
+}
+
+enum RegistrationType {
+  POLA_PEMBIBITAN
+  NON_POLA_PEMBIBITAN
+  DIKLAT
+
+  @@map("registration_type")
+}
+
+enum AdmissionPeriodStatus {
+  DRAFT
+  UPCOMING
+  OPEN
+  CLOSED
+  ARCHIVED
+
+  @@map("admission_period_status")
+}
+
+enum ApplicantDocumentStatus {
+  BELUM_DIVERIFIKASI
+  DIPERIKSA
+  TERVERIFIKASI
+  PERLU_PERBAIKAN
+  DITOLAK
+
+  @@map("applicant_document_status")
+}
+
+enum AdmissionPaymentStatus {
+  BELUM_BAYAR
+  MENUNGGU_VERIFIKASI
+  LUNAS
+  DITOLAK
+  KADALUARSA
+
+  @@map("admission_payment_status")
+}
+
+enum BillingStatus {
+  UNPAID
+  PENDING_VERIFICATION
+  PAID
+  OVERDUE
+  CANCELLED
+
+  @@map("billing_status")
+}
+
+enum FinancePaymentStatus {
+  PENDING_VERIFICATION
+  PAID
+  REJECTED
+
+  @@map("finance_payment_status")
+}
+
+enum ScholarshipStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  REJECTED
+  COMPLETED
+
+  @@map("scholarship_status")
+}
+
+enum ReconciliationStatus {
+  MATCHED
+  UNMATCHED
+  DIFFERENCE
+  PENDING
+
+  @@map("reconciliation_status")
+}
+
+enum SelectionScoringModel {
+  PASS_FAIL
+  SCORE
+  SCORE_AND_PASS
+
+  @@map("selection_scoring_model")
+}
+
+enum SelectionResultStatus {
+  SCHEDULED
+  PRESENT
+  ABSENT
+  PASSED
+  FAILED
+  PENDING
+
+  @@map("selection_result_status")
+}
+
+enum ReRegistrationStatus {
+  BELUM_REGISTRASI
+  DALAM_PROSES
+  DOKUMEN_LENGKAP
+  SELESAI
+  DIBATALKAN
+
+  @@map("re_registration_status")
+}
+
+model AdmissionProgram {
+  id              String               @id @default(uuid()) @db.Uuid
+  code            String               @unique @db.VarChar(40)
+  name            String               @db.VarChar(180)
+  registrationType RegistrationType
+  studyProgramId  String?              @map("study_program_id") @db.Uuid
+  active          Boolean              @default(true)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  studyProgram    StudyProgram?        @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+  periods         AdmissionPeriodProgram[]
+  applications    Application[]
+
+  @@index([registrationType, active])
+  @@map("admission_programs")
+}
+
+model AdmissionPeriod {
+  id               String               @id @default(uuid()) @db.Uuid
+  code             String               @unique @db.VarChar(40)
+  name             String               @db.VarChar(180)
+  academicYear     String               @map("academic_year") @db.VarChar(20)
+  registrationType RegistrationType     @map("registration_type")
+  description      String?              @db.VarChar(1000)
+  status           AdmissionPeriodStatus @default(DRAFT)
+  opensAt          DateTime             @map("opens_at") @db.Timestamptz(3)
+  closesAt         DateTime             @map("closes_at") @db.Timestamptz(3)
+  quota            Int?
+  studentNumberPrefix String?           @map("student_number_prefix") @db.VarChar(20)
+  studentNumberNext Int?                @map("student_number_next")
+  studentNumberWidth Int                 @default(6) @map("student_number_width")
+  registrationSettings Json?            @map("registration_settings")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  programs         AdmissionPeriodProgram[]
+  requirements     AdmissionRequirement[]
+  documents        AdmissionDocumentRequirement[]
+  fees             AdmissionFee[]
+  selectionStages  SelectionStage[]
+  applications     Application[]
+
+  @@index([registrationType, status, opensAt, closesAt])
+  @@index([academicYear, status])
+  @@map("admission_periods")
+}
+
+model AdmissionPeriodProgram {
+  admissionPeriodId String         @map("admission_period_id") @db.Uuid
+  admissionProgramId String        @map("admission_program_id") @db.Uuid
+  quota             Int?
+  period            AdmissionPeriod @relation(fields: [admissionPeriodId], references: [id], onDelete: Cascade)
+  program           AdmissionProgram @relation(fields: [admissionProgramId], references: [id], onDelete: Restrict)
+
+  @@id([admissionPeriodId, admissionProgramId])
+  @@map("admission_period_programs")
+}
+
+model AdmissionRequirement {
+  id               String         @id @default(uuid()) @db.Uuid
+  admissionPeriodId String        @map("admission_period_id") @db.Uuid
+  title            String         @db.VarChar(180)
+  description      String         @db.VarChar(1000)
+  required         Boolean        @default(true)
+  sortOrder        Int            @default(0) @map("sort_order")
+  period           AdmissionPeriod @relation(fields: [admissionPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([admissionPeriodId, sortOrder])
+  @@map("admission_requirements")
+}
+
+model AdmissionDocumentRequirement {
+  id               String         @id @default(uuid()) @db.Uuid
+  admissionPeriodId String        @map("admission_period_id") @db.Uuid
+  documentCode     String         @map("document_code") @db.VarChar(80)
+  label            String         @db.VarChar(180)
+  required         Boolean        @default(true)
+  acceptedMimeTypes String[]      @map("accepted_mime_types")
+  maxSizeBytes     Int?           @map("max_size_bytes")
+  description      String?        @db.VarChar(500)
+  sortOrder        Int            @default(0) @map("sort_order")
+  period           AdmissionPeriod @relation(fields: [admissionPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([admissionPeriodId, documentCode])
+  @@index([admissionPeriodId, sortOrder])
+  @@map("admission_document_requirements")
+}
+
+model AdmissionFee {
+  id               String         @id @default(uuid()) @db.Uuid
+  admissionPeriodId String        @map("admission_period_id") @db.Uuid
+  code             String         @db.VarChar(60)
+  name             String         @db.VarChar(180)
+  amount           Int?
+  currency         String         @default("IDR") @db.VarChar(3)
+  required         Boolean        @default(true)
+  expiresAt        DateTime?      @map("expires_at") @db.Timestamptz(3)
+  period           AdmissionPeriod @relation(fields: [admissionPeriodId], references: [id], onDelete: Cascade)
+  payments         AdmissionPayment[]
+
+  @@unique([admissionPeriodId, code])
+  @@map("admission_fees")
+}
+
+model SelectionStage {
+  id               String               @id @default(uuid()) @db.Uuid
+  admissionPeriodId String              @map("admission_period_id") @db.Uuid
+  code             String               @db.VarChar(60)
+  name             String               @db.VarChar(180)
+  sortOrder        Int                  @map("sort_order")
+  scoringModel     SelectionScoringModel @map("scoring_model")
+  maximumScore     Decimal?             @map("maximum_score") @db.Decimal(7, 2)
+  required         Boolean              @default(true)
+  period           AdmissionPeriod      @relation(fields: [admissionPeriodId], references: [id], onDelete: Cascade)
+  results          SelectionResult[]
+
+  @@unique([admissionPeriodId, code])
+  @@unique([admissionPeriodId, sortOrder])
+  @@map("selection_stages")
+}
+
+model Applicant {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String?       @unique @map("user_id") @db.Uuid
+  nationalId   String?       @unique @map("national_id") @db.VarChar(20)
+  fullName     String?       @map("full_name") @db.VarChar(180)
+  email        String?       @db.VarChar(320)
+  phone        String?       @db.VarChar(30)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  applications Application[]
+  student      Student?
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([fullName])
+  @@index([email])
+  @@map("applicants")
+}
+
+model Application {
+  id               String                    @id @default(uuid()) @db.Uuid
+  registrationNumber String                   @unique @map("registration_number") @db.VarChar(40)
+  applicantId      String                    @map("applicant_id") @db.Uuid
+  admissionPeriodId String?                  @map("admission_period_id") @db.Uuid
+  registrationType RegistrationType?         @map("registration_type")
+  admissionProgramId String?                 @map("admission_program_id") @db.Uuid
+  status           ApplicationStatus         @default(DRAFT)
+  personalData     Json?                     @map("personal_data")
+  parentData       Json?                     @map("parent_data")
+  educationData    Json?                     @map("education_data")
+  physicalData     Json?                     @map("physical_data")
+  professionalData Json?                     @map("professional_data")
+  programData      Json?                     @map("program_data")
+  submittedAt      DateTime?                 @map("submitted_at") @db.Timestamptz(3)
+  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  applicant        Applicant                 @relation(fields: [applicantId], references: [id], onDelete: Restrict)
+  admissionPeriod  AdmissionPeriod?          @relation(fields: [admissionPeriodId], references: [id], onDelete: Restrict)
+  admissionProgram AdmissionProgram?         @relation(fields: [admissionProgramId], references: [id], onDelete: Restrict)
+  documents        ApplicantDocument[]
+  payments         AdmissionPayment[]
+  selectionResults SelectionResult[]
+  statusHistory    ApplicationStatusHistory[]
+  reRegistration   ReRegistration?
+  student          Student?                  @relation("StudentSourceApplication")
+
+  @@index([admissionPeriodId, status, createdAt])
+  @@index([registrationType, status])
+  @@index([applicantId, createdAt])
+  @@index([applicantId, status])
+  @@map("applications")
+}
+
+model ApplicantDocument {
+  id            String                 @id @default(uuid()) @db.Uuid
+  applicationId String                 @map("application_id") @db.Uuid
+  documentCode  String                 @map("document_code") @db.VarChar(80)
+  label         String                 @db.VarChar(180)
+  fileName      String                 @map("file_name") @db.VarChar(255)
+  mimeType      String                 @map("mime_type") @db.VarChar(120)
+  sizeBytes     Int                    @map("size_bytes")
+  fileContent   Bytes                  @map("file_content") @db.ByteA
+  status        ApplicantDocumentStatus @default(BELUM_DIVERIFIKASI)
+  rejectionReason String?              @map("rejection_reason") @db.VarChar(1000)
+  uploadedAt    DateTime               @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  reviewedAt    DateTime?              @map("reviewed_at") @db.Timestamptz(3)
+  application   Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  paymentProofs AdmissionPayment[]     @relation("PaymentProof")
+
+  @@index([applicationId, status])
+  @@map("applicant_documents")
+}
+
+model AdmissionPayment {
+  id              String                @id @default(uuid()) @db.Uuid
+  applicationId   String                @map("application_id") @db.Uuid
+  feeId           String                @map("fee_id") @db.Uuid
+  amount          Int
+  method          String?               @db.VarChar(80)
+  referenceNumber String?               @map("reference_number") @db.VarChar(120)
+  proofDocumentId String?               @unique @map("proof_document_id") @db.Uuid
+  status          AdmissionPaymentStatus @default(BELUM_BAYAR)
+  rejectionReason String?               @map("rejection_reason") @db.VarChar(1000)
+  paidAt          DateTime?             @map("paid_at") @db.Timestamptz(3)
+  reviewedAt      DateTime?             @map("reviewed_at") @db.Timestamptz(3)
+  application     Application           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fee             AdmissionFee         @relation(fields: [feeId], references: [id], onDelete: Restrict)
+  proofDocument   ApplicantDocument?    @relation("PaymentProof", fields: [proofDocumentId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId, feeId])
+  @@index([status, paidAt])
+  @@map("admission_payments")
+}
+
+model SelectionResult {
+  id             String                @id @default(uuid()) @db.Uuid
+  applicationId  String                @map("application_id") @db.Uuid
+  selectionStageId String              @map("selection_stage_id") @db.Uuid
+  status         SelectionResultStatus @default(PENDING)
+  scheduledAt    DateTime?             @map("scheduled_at") @db.Timestamptz(3)
+  score          Decimal?              @db.Decimal(7, 2)
+  grade          String?               @db.VarChar(20)
+  notes          String?               @db.VarChar(1000)
+  completedAt    DateTime?             @map("completed_at") @db.Timestamptz(3)
+  application    Application           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  selectionStage SelectionStage        @relation(fields: [selectionStageId], references: [id], onDelete: Restrict)
+
+  @@unique([applicationId, selectionStageId])
+  @@index([selectionStageId, status, scheduledAt])
+  @@map("selection_results")
+}
+
+model ApplicationStatusHistory {
+  id            String            @id @default(uuid()) @db.Uuid
+  applicationId String            @map("application_id") @db.Uuid
+  actorUserId   String?           @map("actor_user_id") @db.Uuid
+  action        String            @db.VarChar(100)
+  oldStatus     ApplicationStatus? @map("old_status")
+  newStatus     ApplicationStatus? @map("new_status")
+  notes         String?           @db.VarChar(1000)
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor         User?             @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@map("application_status_history")
+}
+
+model ReRegistration {
+  id            String                @id @default(uuid()) @db.Uuid
+  applicationId String                @unique @map("application_id") @db.Uuid
+  status        ReRegistrationStatus  @default(BELUM_REGISTRASI)
+  checklist     Json                  @default("{}")
+  completedAt   DateTime?             @map("completed_at") @db.Timestamptz(3)
+  studentId     String?               @unique @map("student_id") @db.Uuid
+  application   Application           @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  student       Student?              @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@map("re_registrations")
+}
+
+model Student {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  applicantId         String                  @unique @map("applicant_id") @db.Uuid
+  sourceApplicationId String                  @unique @map("source_application_id") @db.Uuid
+  name                String?                 @db.VarChar(180)
+  studentNumber       String?                 @unique @map("student_number") @db.VarChar(30)
+  nationalId          String?                 @map("national_id") @db.VarChar(20)
+  nickname            String?                 @db.VarChar(100)
+  birthPlace          String?                 @map("birth_place") @db.VarChar(120)
+  birthDate           DateTime?               @map("birth_date") @db.Date
+  gender              String?                 @db.VarChar(1)
+  religion            String?                 @db.VarChar(50)
+  email               String?                 @db.VarChar(320)
+  phone               String?                 @db.VarChar(30)
+  address             String?                 @db.VarChar(500)
+  province            String?                 @db.VarChar(100)
+  regency             String?                 @db.VarChar(100)
+  district            String?                 @db.VarChar(100)
+  village             String?                 @db.VarChar(100)
+  postalCode          String?                 @map("postal_code") @db.VarChar(12)
+  studyProgramId      String?                 @map("study_program_id") @db.Uuid
+  cohort              Int?
+  semester            Int?
+  className           String?                 @map("class_name") @db.VarChar(80)
+  academicStatus      StudentAcademicStatus   @default(AKTIF) @map("academic_status")
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  applicant           Applicant               @relation(fields: [applicantId], references: [id], onDelete: Restrict)
+  sourceApplication   Application             @relation("StudentSourceApplication", fields: [sourceApplicationId], references: [id], onDelete: Restrict)
+  studyProgram        StudyProgram?           @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+  krsRecords          KrsRecord[]
+  grades              GradeRecord[]
+  attendance          AttendanceSummary[]
+  attendanceRecords   AttendanceRecord[]
+  graduationEvaluations GraduationEvaluation[]
+  ceremonyRegistrations CeremonyRegistration[]
+  reRegistration     ReRegistration?
+  statusHistory      StudentStatusHistory[]
+  billings           Billing[]
+  scholarships       Scholarship[]
+
+  @@index([studyProgramId, academicStatus])
+  @@map("students")
+}
+
+model StudentStatusHistory {
+  id          String               @id @default(uuid()) @db.Uuid
+  studentId   String               @map("student_id") @db.Uuid
+  oldStatus   StudentAcademicStatus @map("old_status")
+  newStatus   StudentAcademicStatus @map("new_status")
+  effectiveAt DateTime             @map("effective_at") @db.Timestamptz(3)
+  reason      String               @db.VarChar(500)
+  notes       String?              @db.VarChar(1000)
+  actorLabel  String               @default("Administrator") @map("actor_label") @db.VarChar(180)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  student     Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, effectiveAt])
+  @@map("student_status_history")
+}
+
+model Billing {
+  id                 String        @id @default(uuid()) @db.Uuid
+  billingNumber      String        @unique @map("billing_number") @db.VarChar(40)
+  studentId          String        @map("student_id") @db.Uuid
+  academicYear       String        @map("academic_year") @db.VarChar(9)
+  semester           Int
+  billingType        String        @map("billing_type") @db.VarChar(120)
+  description        String        @db.VarChar(1000)
+  amount             Int
+  dueDate            DateTime      @map("due_date") @db.Date
+  status             BillingStatus @default(UNPAID)
+  note               String?       @db.VarChar(1000)
+  cancelledAt        DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  cancellationReason String?       @map("cancellation_reason") @db.VarChar(1000)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  student            Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  tariffId           String?       @map("tariff_id") @db.Uuid
+  tariff             Tariff?       @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  scholarshipId      String?       @map("scholarship_id") @db.Uuid
+  scholarship        Scholarship?  @relation(fields: [scholarshipId], references: [id], onDelete: Restrict)
+  grossAmount        Int?          @map("gross_amount")
+  discountAmount     Int           @default(0) @map("discount_amount")
+  history            BillingHistory[]
+  payments           Payment[]
+
+  @@unique([studentId, academicYear, semester, billingType])
+  @@index([status, dueDate])
+  @@index([academicYear, semester, status])
+  @@index([tariffId])
+  @@map("billings")
+}
+
+model BillingHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  billingId  String   @map("billing_id") @db.Uuid
+  actorLabel String   @default("Administrator Back Office") @map("actor_label") @db.VarChar(180)
+  action     String   @db.VarChar(80)
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  reason     String?  @db.VarChar(1000)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  billing    Billing  @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
+  @@index([billingId, createdAt])
+  @@map("billing_history")
+}
+
+model Payment {
+  id                String              @id @default(uuid()) @db.Uuid
+  transactionNumber String              @unique @map("transaction_number") @db.VarChar(40)
+  billingId         String              @map("billing_id") @db.Uuid
+  paymentReference  String?             @map("payment_reference") @db.VarChar(120)
+  paymentMethod     String              @map("payment_method") @db.VarChar(80)
+  amount            Int
+  status            FinancePaymentStatus @default(PENDING_VERIFICATION)
+  submittedAt       DateTime            @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  paidAt            DateTime?           @map("paid_at") @db.Timestamptz(3)
+  reviewedAt        DateTime?           @map("reviewed_at") @db.Timestamptz(3)
+  rejectionReason   String?             @map("rejection_reason") @db.VarChar(1000)
+  billing           Billing             @relation(fields: [billingId], references: [id], onDelete: Restrict)
+  proof             PaymentProof?
+  history           PaymentHistory[]
+
+  @@index([status, submittedAt])
+  @@index([billingId, submittedAt])
+  @@map("payments")
+}
+
+model PaymentProof {
+  id          String   @id @default(uuid()) @db.Uuid
+  paymentId   String   @unique @map("payment_id") @db.Uuid
+  fileName    String   @map("file_name") @db.VarChar(255)
+  mimeType    String   @map("mime_type") @db.VarChar(120)
+  sizeBytes   Int      @map("size_bytes")
+  fileContent Bytes    @map("file_content") @db.ByteA
+  uploadedAt  DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_proofs")
+}
+
+model PaymentHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  paymentId  String   @map("payment_id") @db.Uuid
+  actorLabel String   @default("Administrator Back Office") @map("actor_label") @db.VarChar(180)
+  action     String   @db.VarChar(80)
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  reason     String?  @db.VarChar(1000)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  payment    Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, createdAt])
+  @@map("payment_history")
+}
+
+model Tariff {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique @db.VarChar(40)
+  name           String   @db.VarChar(180)
+  kind           String   @db.VarChar(80)
+  studyProgramId String?  @map("study_program_id") @db.Uuid
+  pathway        String?  @db.VarChar(120)
+  semester       Int
+  academicYear   String   @map("academic_year") @db.VarChar(9)
+  amount         Int
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  studyProgram   StudyProgram? @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+  billings       Billing[]
+  history        TariffHistory[]
+
+  @@index([academicYear, studyProgramId, active])
+  @@map("tariffs")
+}
+
+model Scholarship {
+  id           String           @id @default(uuid()) @db.Uuid
+  studentId    String           @map("student_id") @db.Uuid
+  kind         String           @db.VarChar(120)
+  academicYear String           @map("academic_year") @db.VarChar(9)
+  amount       Int
+  provider     String           @db.VarChar(180)
+  startsAt     DateTime         @map("starts_at") @db.Date
+  endsAt       DateTime         @map("ends_at") @db.Date
+  status       ScholarshipStatus @default(PENDING_VERIFICATION)
+  documentName String?          @map("document_name") @db.VarChar(255)
+  note         String?          @db.VarChar(1000)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  billings     Billing[]
+  history      ScholarshipHistory[]
+
+  @@unique([studentId, academicYear, kind])
+  @@index([academicYear, status])
+  @@index([studentId, academicYear])
+  @@map("scholarships")
+}
+
+model Reconciliation {
+  id                String               @id @default(uuid()) @db.Uuid
+  transactionDate   DateTime             @map("transaction_date") @db.Date
+  externalReference String               @map("external_reference") @db.VarChar(120)
+  billingNumber     String               @map("billing_number") @db.VarChar(40)
+  studentNim        String               @map("student_nim") @db.VarChar(30)
+  internalAmount    Int?                 @map("internal_amount")
+  externalAmount    Int                  @map("external_amount")
+  paymentMethod     String               @map("payment_method") @db.VarChar(80)
+  status            ReconciliationStatus @default(PENDING)
+  paymentId         String?              @map("payment_id") @db.Uuid
+  note              String?              @db.VarChar(1000)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  history           ReconciliationHistory[]
+
+  @@unique([externalReference, paymentMethod])
+  @@index([transactionDate, status])
+  @@index([paymentId])
+  @@map("reconciliations")
+}
+
+model TariffHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  tariffId   String   @map("tariff_id") @db.Uuid
+  actorLabel String   @default("Administrator Back Office") @map("actor_label") @db.VarChar(180)
+  action     String   @db.VarChar(80)
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  reason     String?  @db.VarChar(1000)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  tariff     Tariff   @relation(fields: [tariffId], references: [id], onDelete: Cascade)
+
+  @@index([tariffId, createdAt])
+  @@map("tariff_history")
+}
+
+model ScholarshipHistory {
+  id            String      @id @default(uuid()) @db.Uuid
+  scholarshipId String      @map("scholarship_id") @db.Uuid
+  actorLabel    String      @default("Administrator Back Office") @map("actor_label") @db.VarChar(180)
+  action        String      @db.VarChar(80)
+  oldValue      Json?       @map("old_value")
+  newValue      Json?       @map("new_value")
+  reason        String?     @db.VarChar(1000)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  scholarship   Scholarship @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+
+  @@index([scholarshipId, createdAt])
+  @@map("scholarship_history")
+}
+
+model ReconciliationHistory {
+  id                String          @id @default(uuid()) @db.Uuid
+  reconciliationId  String          @map("reconciliation_id") @db.Uuid
+  actorLabel        String          @default("Administrator Back Office") @map("actor_label") @db.VarChar(180)
+  action            String          @db.VarChar(80)
+  oldValue          Json?           @map("old_value")
+  newValue          Json?           @map("new_value")
+  reason            String?         @db.VarChar(1000)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  reconciliation    Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+
+  @@index([reconciliationId, createdAt])
+  @@map("reconciliation_history")
+}
+
+enum StudentAcademicStatus {
+  AKTIF
+  CUTI
+  NONAKTIF
+  LULUS
+  DROP_OUT
+
+  @@map("student_academic_status")
+}
+
+enum AcademicRecordStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("academic_record_status")
+}
+
+enum CurriculumCourseNature {
+  WAJIB
+  PILIHAN
+
+  @@map("curriculum_course_nature")
+}
+
+enum CurriculumStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+
+  @@map("curriculum_status")
+}
+
+enum CourseKind {
+  WAJIB
+  PILIHAN
+  PRAKTIKUM
+
+  @@map("course_kind")
+}
+
+enum AcademicTerm {
+  GANJIL
+  GENAP
+
+  @@map("academic_term")
+}
+
+enum OfferingStatus {
+  OPEN
+  ACTIVE
+  CLOSED
+
+  @@map("offering_status")
+}
+
+enum ScheduleStatus {
+  CONFIRMED
+  CONFLICT
+
+  @@map("schedule_status")
+}
+
+enum KrsStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+
+  @@map("krs_status")
+}
+
+enum GradeStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  PUBLISHED
+
+  @@map("grade_status")
+}
+
+enum GraduationStatus {
+  NOT_ELIGIBLE
+  PENDING
+  ELIGIBLE
+  VERIFIED
+  GRADUATED
+
+  @@map("graduation_status")
+}
+
+enum CeremonyStatus {
+  DRAFT
+  OPEN
+  VERIFICATION
+  VERIFIED
+  CLOSED
+
+  @@map("ceremony_status")
+}
+
+enum CeremonyRegistrationStatus {
+  REGISTERED
+  VERIFIED
+  REJECTED
+
+  @@map("ceremony_registration_status")
+}
+
+enum AttendanceRecordStatus {
+  HADIR
+  IZIN
+  SAKIT
+  ALPA
+
+  @@map("attendance_record_status")
+}
+
+enum AcademicCalendarCategory {
+  KULIAH
+  KRS
+  UTS
+  UAS
+  LIBUR
+  REGISTRASI
+  WISUDA
+  PENERIMAAN
+  PENERIMAAN_MAHASISWA
+  DEADLINE
+  LAINNYA
+
+  @@map("academic_calendar_category")
+}
+
+enum CalendarEventStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("calendar_event_status")
+}
+
+model StudyProgram {
+  id              String              @id @default(uuid()) @db.Uuid
+  code            String              @unique @db.VarChar(30)
+  name            String              @db.VarChar(180)
+  degree          String              @db.VarChar(20)
+  unit            String              @db.VarChar(180)
+  headLecturerId  String?             @map("head_lecturer_id") @db.Uuid
+  status          AcademicRecordStatus @default(ACTIVE)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  headLecturer    Lecturer?           @relation("ProgramHead", fields: [headLecturerId], references: [id], onDelete: Restrict)
+  lecturers       Lecturer[]          @relation("LecturerProgram")
+  students        Student[]
+  curricula       Curriculum[]
+  courses         Course[]
+  graduationRules GraduationRule[]
+  admissionPrograms AdmissionProgram[]
+  tariffs           Tariff[]
+
+  @@map("study_programs")
+}
+
+model Lecturer {
+  id              String              @id @default(uuid()) @db.Uuid
+  nidn            String              @unique @db.VarChar(30)
+  nip             String?             @unique @db.VarChar(30)
+  name            String              @db.VarChar(180)
+  title           String              @db.VarChar(100)
+  titleFront      String?             @map("title_front") @db.VarChar(80)
+  titleBack       String?             @map("title_back") @db.VarChar(80)
+  email           String?             @unique @db.VarChar(320)
+  phone           String?             @db.VarChar(30)
+  studyProgramId  String              @map("study_program_id") @db.Uuid
+  status          AcademicRecordStatus @default(ACTIVE)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  studyProgram    StudyProgram        @relation("LecturerProgram", fields: [studyProgramId], references: [id], onDelete: Restrict)
+  headedPrograms  StudyProgram[]      @relation("ProgramHead")
+  offerings       ClassOffering[]
+
+  @@index([studyProgramId, status])
+  @@map("lecturers")
+}
+
+model Curriculum {
+  id             String           @id @default(uuid()) @db.Uuid
+  code           String?          @unique @db.VarChar(40)
+  studyProgramId String           @map("study_program_id") @db.Uuid
+  name           String           @db.VarChar(180)
+  effectiveYear  Int              @map("effective_year")
+  endYear        Int?             @map("end_year")
+  status         CurriculumStatus @default(DRAFT)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  studyProgram   StudyProgram     @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+  courses        CurriculumCourse[]
+
+  @@unique([studyProgramId, effectiveYear])
+  @@map("curricula")
+}
+
+model Course {
+  id             String       @id @default(uuid()) @db.Uuid
+  code           String       @unique @db.VarChar(30)
+  name           String       @db.VarChar(180)
+  credits        Int
+  semester       Int
+  studyProgramId String       @map("study_program_id") @db.Uuid
+  kind           CourseKind
+  description    String?      @db.VarChar(1000)
+  status         AcademicRecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  studyProgram   StudyProgram @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+  curricula      CurriculumCourse[]
+  prerequisites  CoursePrerequisite[] @relation("CoursePrerequisites")
+  requiredBy     CoursePrerequisite[] @relation("CourseRequiredBy")
+  offerings      ClassOffering[]
+
+  @@index([studyProgramId, semester])
+  @@map("courses")
+}
+
+model CurriculumCourse {
+  curriculumId String     @map("curriculum_id") @db.Uuid
+  courseId     String     @map("course_id") @db.Uuid
+  semester     Int?
+  nature       CurriculumCourseNature?
+  credits      Int?
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  course       Course     @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@id([curriculumId, courseId])
+  @@index([courseId])
+  @@map("curriculum_courses")
+}
+
+model CoursePrerequisite {
+  courseId       String @map("course_id") @db.Uuid
+  prerequisiteId String @map("prerequisite_id") @db.Uuid
+  course         Course @relation("CoursePrerequisites", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisite   Course @relation("CourseRequiredBy", fields: [prerequisiteId], references: [id], onDelete: Restrict)
+
+  @@id([courseId, prerequisiteId])
+  @@index([prerequisiteId])
+  @@map("course_prerequisites")
+}
+
+model ClassOffering {
+  id             String          @id @default(uuid()) @db.Uuid
+  code           String          @unique @db.VarChar(50)
+  courseId       String          @map("course_id") @db.Uuid
+  lecturerId     String          @map("lecturer_id") @db.Uuid
+  academicYear   String          @map("academic_year") @db.VarChar(20)
+  term           AcademicTerm
+  className      String          @map("class_name") @db.VarChar(80)
+  capacity       Int
+  status         OfferingStatus  @default(OPEN)
+  room           String?         @db.VarChar(100)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  course         Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  lecturer       Lecturer        @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  schedules      ClassSchedule[]
+  krsItems       KrsItem[]
+  grades         GradeRecord[]
+  attendance     AttendanceSummary[]
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([courseId, academicYear, term, className])
+  @@index([lecturerId, academicYear, term])
+  @@map("class_offerings")
+}
+
+model ClassSchedule {
+  id          String         @id @default(uuid()) @db.Uuid
+  offeringId  String         @map("offering_id") @db.Uuid
+  day         String         @db.VarChar(12)
+  start       String         @db.VarChar(5)
+  end         String         @db.VarChar(5)
+  room        String         @db.VarChar(100)
+  status      ScheduleStatus @default(CONFIRMED)
+  offering    ClassOffering  @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@index([day, start, end])
+  @@index([room, day])
+  @@map("class_schedules")
+}
+
+model KrsRecord {
+  id             String     @id @default(uuid()) @db.Uuid
+  studentId      String     @map("student_id") @db.Uuid
+  academicYear   String     @map("academic_year") @db.VarChar(20)
+  term           AcademicTerm
+  status         KrsStatus  @default(DRAFT)
+  rejectionReason String?   @map("rejection_reason") @db.VarChar(500)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  student        Student    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  items          KrsItem[]
+  statusHistory  KrsStatusHistory[]
+
+  @@unique([studentId, academicYear, term])
+  @@map("krs_records")
+}
+
+model KrsStatusHistory {
+  id          String    @id @default(uuid()) @db.Uuid
+  krsId       String    @map("krs_id") @db.Uuid
+  oldStatus   KrsStatus @map("old_status")
+  newStatus   KrsStatus @map("new_status")
+  reason      String?   @db.VarChar(500)
+  actorLabel  String    @default("Administrator") @map("actor_label") @db.VarChar(180)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  krs         KrsRecord @relation(fields: [krsId], references: [id], onDelete: Cascade)
+
+  @@index([krsId, createdAt])
+  @@map("krs_status_history")
+}
+
+model KrsItem {
+  krsId       String        @map("krs_id") @db.Uuid
+  offeringId  String        @map("offering_id") @db.Uuid
+  krs         KrsRecord     @relation(fields: [krsId], references: [id], onDelete: Cascade)
+  offering    ClassOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@id([krsId, offeringId])
+  @@index([offeringId])
+  @@map("krs_items")
+}
+
+model GradeRecord {
+  id          String      @id @default(uuid()) @db.Uuid
+  studentId   String      @map("student_id") @db.Uuid
+  offeringId  String      @map("offering_id") @db.Uuid
+  assignment  Decimal     @default(0) @db.Decimal(5, 2)
+  midterm     Decimal     @default(0) @db.Decimal(5, 2)
+  finalExam   Decimal     @default(0) @map("final_exam") @db.Decimal(5, 2)
+  finalScore  Decimal     @default(0) @map("final_score") @db.Decimal(5, 2)
+  grade       String      @default("-") @db.VarChar(3)
+  status      GradeStatus @default(DRAFT)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  offering    ClassOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, offeringId])
+  @@map("grade_records")
+}
+
+model AttendanceSummary {
+  id          String        @id @default(uuid()) @db.Uuid
+  studentId   String        @map("student_id") @db.Uuid
+  offeringId  String        @map("offering_id") @db.Uuid
+  meetings    Int           @default(0)
+  present     Int           @default(0)
+  excused     Int           @default(0)
+  sick        Int           @default(0)
+  absent      Int           @default(0)
+  student     Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  offering    ClassOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, offeringId])
+  @@map("attendance_summaries")
+}
+
+model AttendanceRecord {
+  id            String        @id @default(uuid()) @db.Uuid
+  studentId     String        @map("student_id") @db.Uuid
+  offeringId    String        @map("offering_id") @db.Uuid
+  meetingNumber Int           @map("meeting_number")
+  date          DateTime      @db.Date
+  status        AttendanceRecordStatus
+  note          String?       @db.VarChar(500)
+  student       Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  offering      ClassOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, offeringId, meetingNumber])
+  @@index([offeringId, date])
+  @@map("attendance_records")
+}
+
+model GraduationRule {
+  id                        String       @id @default(uuid()) @db.Uuid
+  studyProgramId            String       @map("study_program_id") @db.Uuid
+  minimumCredits            Int          @map("minimum_credits")
+  minimumGpa                Decimal      @map("minimum_gpa") @db.Decimal(3, 2)
+  minimumAttendancePercent  Decimal      @map("minimum_attendance_percent") @db.Decimal(5, 2)
+  requiredDocuments         String[]     @map("required_documents")
+  active                    Boolean      @default(true)
+  createdAt                 DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  studyProgram              StudyProgram @relation(fields: [studyProgramId], references: [id], onDelete: Restrict)
+
+  @@index([studyProgramId, active])
+  @@map("graduation_rules")
+}
+
+model GraduationEvaluation {
+  id                    String           @id @default(uuid()) @db.Uuid
+  studentId             String           @map("student_id") @db.Uuid
+  academicYear          String           @map("academic_year") @db.VarChar(20)
+  credits               Int
+  gpa                   Decimal          @db.Decimal(3, 2)
+  attendancePercent     Decimal          @map("attendance_percent") @db.Decimal(5, 2)
+  outstandingRequirements String[]       @map("outstanding_requirements")
+  status                GraduationStatus @default(PENDING)
+  verifiedAt            DateTime?        @map("verified_at") @db.Date
+  note                  String?          @db.VarChar(1000)
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  student               Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, academicYear])
+  @@map("graduation_evaluations")
+}
+
+model CeremonyPeriod {
+  id                String                 @id @default(uuid()) @db.Uuid
+  code              String?                @unique @db.VarChar(40)
+  name              String                 @db.VarChar(180)
+  date              DateTime               @db.Date
+  location          String                 @db.VarChar(240)
+  capacity          Int
+  registrationStart DateTime               @map("registration_start") @db.Date
+  registrationEnd   DateTime               @map("registration_end") @db.Date
+  status            CeremonyStatus         @default(DRAFT)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  registrations     CeremonyRegistration[]
+
+  @@map("ceremony_periods")
+}
+
+model CeremonyRegistration {
+  id              String                     @id @default(uuid()) @db.Uuid
+  ceremonyId      String                     @map("ceremony_id") @db.Uuid
+  studentId       String                     @map("student_id") @db.Uuid
+  status          CeremonyRegistrationStatus @default(REGISTERED)
+  documentsReady  Int                        @default(0) @map("documents_ready")
+  documentsRequired Int                      @default(0) @map("documents_required")
+  registrationDate DateTime?                 @map("registration_date") @db.Date
+  note              String?                  @db.VarChar(1000)
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  ceremony        CeremonyPeriod             @relation(fields: [ceremonyId], references: [id], onDelete: Restrict)
+  student         Student                    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([ceremonyId, studentId])
+  @@map("ceremony_registrations")
+}
+
+model AcademicCalendarEvent {
+  id          String                 @id @default(uuid()) @db.Uuid
+  academicYear String?               @map("academic_year") @db.VarChar(20)
+  title       String                 @db.VarChar(180)
+  category    AcademicCalendarCategory
+  start       DateTime               @db.Date
+  end         DateTime               @db.Date
+  description String                 @db.VarChar(1000)
+  audience    String                 @db.VarChar(180)
+  status      CalendarEventStatus    @default(DRAFT)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([start, end])
+  @@map("academic_calendar_events")
+}

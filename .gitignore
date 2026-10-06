@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+.turbo/
+dist/
+build/
+.next/
+.next-preview/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE and operating system
+.idea/
+.vscode/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+
+# Prisma generated client
+apps/api/src/generated/prisma/
